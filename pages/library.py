@@ -5,129 +5,141 @@ import pandas as pd
 # 1. 페이지 설정
 # ------------------------------------------------------------------------------
 st.set_page_config(
-    page_title="서초구 전자도서관 검색기",
+    page_title="서초구 전자도서관 전체 검색기",
     page_icon="📚",
     layout="wide"
 )
 
 # ------------------------------------------------------------------------------
-# 2. 데이터 로드 함수
+# 2. 데이터 로드 (전체 데이터 가져오기)
 # ------------------------------------------------------------------------------
 @st.cache_data(ttl=600)
 def load_data():
-    # 구글 스프레드시트 CSV 내보내기 링크
     sheet_id = "1XC7ECtGVVanxBUX8BsLXlAcCZ2ULi2nZgFTd7BAT9zY"
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
     
     try:
+        # 전체 데이터를 읽어옵니다 (샘플링 제거)
         df = pd.read_csv(url)
-        # 데이터가 100개보다 많으면 랜덤으로 100개만 추출
-        if len(df) > 100:
-            df = df.sample(n=100)
         return df
     except Exception as e:
         return None
 
-# 데이터 불러오기 실행
 df = load_data()
 
 # ------------------------------------------------------------------------------
-# 3. 사이드바 설정을 통한 오류 해결 (매우 중요)
+# 3. 사이드바: 컬럼 매핑 (F열, G열 우선 적용)
 # ------------------------------------------------------------------------------
-st.sidebar.title("⚙️ 설정")
-st.sidebar.info("책 정보가 안 보이면 아래에서 항목을 맞춰주세요.")
+st.sidebar.title("⚙️ 데이터 설정")
 
 if df is not None and not df.empty:
     cols = df.columns.tolist()
+    
+    # 헬퍼 함수: 인덱스가 범위를 벗어나지 않도록 안전하게 반환
+    def safe_index(idx, max_len):
+        return idx if idx < max_len else 0
 
-    # 컬럼 자동 찾기 헬퍼 함수
-    def get_index(keywords, columns):
+    # 1. 자료유형 (F열 -> 인덱스 5)
+    # 엑셀은 A=0, B=1, ... F=5
+    default_type_idx = safe_index(5, len(cols))
+    col_type = st.sidebar.selectbox("자료유형 (F열)", cols, index=default_type_idx)
+
+    # 2. 분야 (G열 -> 인덱스 6)
+    default_cat_idx = safe_index(6, len(cols))
+    col_category = st.sidebar.selectbox("분야 (G열)", cols, index=default_cat_idx)
+
+    st.sidebar.markdown("---")
+    st.sidebar.info("나머지 정보가 안 맞으면 아래에서 조정해주세요.")
+
+    # 나머지 컬럼 자동 매칭 시도
+    def get_index_by_keyword(keywords, columns):
         for i, col in enumerate(columns):
             for k in keywords:
                 if k in col:
                     return i
         return 0
 
-    st.sidebar.markdown("### 1. 엑셀 컬럼 연결")
-    
-    # 각 항목에 대해 엑셀의 어느 열을 사용할지 선택 (기본값 자동 매칭 시도)
-    col_title = st.sidebar.selectbox("책 제목", cols, index=get_index(['서명', '제목', 'Title'], cols))
-    col_author = st.sidebar.selectbox("저자", cols, index=get_index(['저자', '지은이', 'Author'], cols))
-    col_pub = st.sidebar.selectbox("출판사", cols, index=get_index(['출판', '발행', 'Publisher'], cols))
-    col_category = st.sidebar.selectbox("분야(장르)", cols, index=get_index(['분야', '장르', '주제', 'Category'], cols))
-    col_type = st.sidebar.selectbox("자료유형(오디오북/전자책)", cols, index=get_index(['유형', '구분', 'Type'], cols))
-    col_img = st.sidebar.selectbox("이미지 URL", cols, index=get_index(['이미지', 'Image', 'URL', '표지'], cols))
+    col_title = st.sidebar.selectbox("책 제목", cols, index=get_index_by_keyword(['서명', '제목', 'Title'], cols))
+    col_author = st.sidebar.selectbox("저자", cols, index=get_index_by_keyword(['저자', '지은이', 'Author'], cols))
+    col_pub = st.sidebar.selectbox("출판사", cols, index=get_index_by_keyword(['출판', '발행', 'Publisher'], cols))
+    col_img = st.sidebar.selectbox("이미지 URL", cols, index=get_index_by_keyword(['이미지', 'Image', 'URL', '표지'], cols))
+
 
     # --------------------------------------------------------------------------
-    # 4. 메인 화면 구현
+    # 4. 메인 화면: 검색 및 추천
     # --------------------------------------------------------------------------
     st.title("📚 서초구 전자도서관 도서 검색기")
-    st.markdown("랜덤으로 선정된 **100권**의 도서 중에서 추천해 드립니다.")
+    
+    # 전체 데이터 건수 표시
+    st.markdown(f"현재 등록된 **{len(df):,}권**의 도서 데이터를 모두 탐색합니다.")
     st.divider()
 
-    # 검색 필터 (2단 구성)
+    # (1) 검색 필터 구성
     c1, c2 = st.columns(2)
     
     with c1:
-        # 자료 유형 선택
-        types = ['전체'] + list(df[col_type].unique())
-        selected_type = st.selectbox("자료 유형 선택", types)
+        # F열의 고유값 추출 (오디오북, 전자책 등)
+        types = ['전체'] + sorted(list(df[col_type].dropna().unique()))
+        selected_type = st.selectbox(f"자료 유형 선택 ({col_type})", types)
     
     with c2:
-        # 분야 선택 (자료 유형에 따라 연동)
+        # G열의 고유값 추출 (분야)
+        # 유형 선택에 따라 분야 목록을 필터링하여 보여줌 (선택 편의성)
         if selected_type != '전체':
-            available_cats = df[df[col_type] == selected_type][col_category].unique()
+            filtered_by_type = df[df[col_type] == selected_type]
+            available_cats = filtered_by_type[col_category].dropna().unique()
         else:
-            available_cats = df[col_category].unique()
+            available_cats = df[col_category].dropna().unique()
         
-        cats = ['전체'] + list(available_cats)
-        selected_category = st.selectbox("분야 선택", cats)
+        cats = ['전체'] + sorted(list(available_cats))
+        selected_category = st.selectbox(f"분야 선택 ({col_category})", cats)
 
-    # 추천 버튼 클릭 시 동작
-    if st.button("🔍 도서 추천받기", use_container_width=True):
+    # (2) 추천 버튼
+    if st.button("🔍 맞춤 도서 추천받기", use_container_width=True):
         st.divider()
         
-        # 필터링
-        filtered_df = df.copy()
+        # 데이터 필터링
+        result_df = df.copy()
+        
         if selected_type != '전체':
-            filtered_df = filtered_df[filtered_df[col_type] == selected_type]
+            result_df = result_df[result_df[col_type] == selected_type]
+            
         if selected_category != '전체':
-            filtered_df = filtered_df[filtered_df[col_category] == selected_category]
+            result_df = result_df[result_df[col_category] == selected_category]
             
-        # 결과 표시
-        if filtered_df.empty:
-            st.warning("조건에 맞는 도서가 없습니다.")
+        # 결과 처리
+        if result_df.empty:
+            st.warning("조건에 맞는 도서가 없습니다. 다른 조건을 선택해보세요.")
         else:
-            # 최대 3권 랜덤
-            sample_count = min(3, len(filtered_df))
-            results = filtered_df.sample(n=sample_count)
+            # 검색된 책 중에서 랜덤 3권 추출
+            count = min(3, len(result_df))
+            recommendations = result_df.sample(n=count)
             
-            st.subheader(f"🎉 추천 도서 {sample_count}권")
+            st.subheader(f"🎉 추천 도서 {count}권 (총 {len(result_df)}권 중 선정)")
             
-            for index, row in results.iterrows():
-                # 카드 형태의 레이아웃
+            for i, row in recommendations.iterrows():
                 with st.container():
-                    col_img_view, col_info_view = st.columns([1, 3])
+                    col_img_view, col_info_view = st.columns([1, 4])
                     
                     # 이미지 표시
                     with col_img_view:
-                        img_link = str(row[col_img])
-                        if img_link.startswith("http"):
-                            st.image(img_link, use_container_width=True)
+                        img_url = str(row[col_img])
+                        if img_url.startswith("http"):
+                            st.image(img_url, use_container_width=True)
                         else:
-                            st.text("이미지 없음")
+                            st.markdown("🖼️<br>이미지 없음", unsafe_allow_html=True)
                     
-                    # 정보 표시
+                    # 텍스트 정보 표시
                     with col_info_view:
                         st.markdown(f"### {row[col_title]}")
-                        st.text(f"저자: {row[col_author]} | 출판사: {row[col_pub]}")
+                        st.markdown(f"**저자:** {row[col_author]} | **출판사:** {row[col_pub]}")
                         st.caption(f"분야: {row[col_category]} | 유형: {row[col_type]}")
                         
-                        # 한줄 요약 (데이터 조합)
-                        summary = f"이 책은 {row[col_category]} 분야에서 주목받는 도서입니다. {row[col_author]} 작가의 이야기를 통해 새로운 영감을 얻어보세요."
+                        # 자동 생성 요약 문구
+                        summary = f"이 도서는 '{row[col_category]}' 분야의 책입니다. {row[col_author]} 작가의 작품을 찾고 계셨다면 이 책을 추천합니다."
                         st.info(summary)
-                
+                        
                 st.markdown("---")
 
 else:
-    st.error("데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
+    st.error("데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.")
