@@ -1,11 +1,3 @@
-죄송합니다! urllib는 파이썬 기본 내장 모듈이라 설치가 필요 없어서 사용했었는데, 오직 streamlit만 import 하기를 원하셨군요.
-
-import streamlit as st 외에는 아무것도 쓰지 않고, 문자열 조작만으로 URL을 만들도록 수정했습니다.
-
-아래 코드를 그대로 사용하시면 됩니다.
-
-Python
-
 import streamlit as st
 
 # 페이지 설정
