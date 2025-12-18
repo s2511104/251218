@@ -130,9 +130,6 @@ if df is not None and not df.empty:
                         st.markdown(f"**저자:** {row[col_author]} | **출판사:** {row[col_pub]}")
                         st.caption(f"분야: {row[col_category]} | 유형: {row[col_type]}")
                         
-                        summary = f"이 책은 {row[col_category]} 분야의 도서입니다."
-                        st.info(summary)
-                        
                 st.markdown("---")
 
 else:
