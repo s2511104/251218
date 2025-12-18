@@ -11,7 +11,7 @@ st.set_page_config(
 # ------------------------------------------------------------------------------
 # 1. 데이터 로드 및 전처리
 # ------------------------------------------------------------------------------
-@st.cache_data(ttl=600)
+st.cache_data(ttl=600)
 def load_data():
     # 구글 스프레드시트 CSV 링크
     sheet_id = "1XC7ECtGVVanxBUX8BsLXlAcCZ2ULi2nZgFTd7BAT9zY"
