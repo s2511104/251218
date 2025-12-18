@@ -81,4 +81,53 @@ if df is not None and not df.empty:
             available_cats = df[col_category].unique()
         
         cats = ['전체'] + list(available_cats)
-        selected_category = st.selectbox("분야
+        selected_category = st.selectbox("분야 선택", cats)
+
+    # 추천 버튼 클릭 시 동작
+    if st.button("🔍 도서 추천받기", use_container_width=True):
+        st.divider()
+        
+        # 필터링
+        filtered_df = df.copy()
+        if selected_type != '전체':
+            filtered_df = filtered_df[filtered_df[col_type] == selected_type]
+        if selected_category != '전체':
+            filtered_df = filtered_df[filtered_df[col_category] == selected_category]
+            
+        # 결과 표시
+        if filtered_df.empty:
+            st.warning("조건에 맞는 도서가 없습니다.")
+        else:
+            # 최대 3권 랜덤
+            sample_count = min(3, len(filtered_df))
+            results = filtered_df.sample(n=sample_count)
+            
+            st.subheader(f"🎉 추천 도서 {sample_count}권")
+            
+            for index, row in results.iterrows():
+                # 카드 형태의 레이아웃
+                with st.container():
+                    col_img_view, col_info_view = st.columns([1, 3])
+                    
+                    # 이미지 표시
+                    with col_img_view:
+                        img_link = str(row[col_img])
+                        if img_link.startswith("http"):
+                            st.image(img_link, use_container_width=True)
+                        else:
+                            st.text("이미지 없음")
+                    
+                    # 정보 표시
+                    with col_info_view:
+                        st.markdown(f"### {row[col_title]}")
+                        st.text(f"저자: {row[col_author]} | 출판사: {row[col_pub]}")
+                        st.caption(f"분야: {row[col_category]} | 유형: {row[col_type]}")
+                        
+                        # 한줄 요약 (데이터 조합)
+                        summary = f"이 책은 {row[col_category]} 분야에서 주목받는 도서입니다. {row[col_author]} 작가의 이야기를 통해 새로운 영감을 얻어보세요."
+                        st.info(summary)
+                
+                st.markdown("---")
+
+else:
+    st.error("데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
