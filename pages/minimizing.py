@@ -1,87 +1,65 @@
-import streamlit as st
-import urllib.parse
+죄송합니다! urllib는 파이썬 기본 내장 모듈이라 설치가 필요 없어서 사용했었는데, 오직 streamlit만 import 하기를 원하셨군요.
 
-# 페이지 기본 설정
+import streamlit as st 외에는 아무것도 쓰지 않고, 문자열 조작만으로 URL을 만들도록 수정했습니다.
+
+아래 코드를 그대로 사용하시면 됩니다.
+
+Python
+
+import streamlit as st
+
+# 페이지 설정
 st.set_page_config(
     page_title="축제 물품 최저가 탐색기",
     page_icon="🎉",
     layout="centered"
 )
 
-# 제목 및 설명
 st.title("🎉 축제 물품 최저가 탐색기")
-st.write("각 쇼핑몰의 **최저가 정렬** 검색 결과로 바로 연결해 드립니다.")
-st.caption("※ 외부 라이브러리 설치 제한으로 인해 실시간 크롤링 대신 '바로가기' 기능을 제공합니다.")
-
+st.write("원하는 물품을 선택하면 각 쇼핑몰의 **최저가 검색 결과**로 연결됩니다.")
 st.markdown("---")
 
-# 검색할 물품 리스트 (상품명과 검색 키워드)
-items = [
-    {
-        "display_name": "Take Alive 머스캣 청포도 120ml",
-        "keyword": "테이크 얼라이브 머스캣 120ml",
-        "image": "🧃"
-    },
-    {
-        "display_name": "매일우유 1L",
-        "keyword": "매일우유 1L",
-        "image": "🥛"
-    },
-    {
-        "display_name": "미떼 오리지날 핫초코 30g x 10개입",
-        "keyword": "미떼 오리지날 핫초코 30g 10개",
-        "image": "☕"
-    }
-]
+# 물품 데이터 (표시 이름 : 검색 키워드)
+items = {
+    "🧃 Take Alive 머스캣 청포도 120ml": "테이크 얼라이브 머스캣 120ml",
+    "🥛 매일우유 1L": "매일우유 1L",
+    "☕ 미떼 오리지날 핫초코 30g x 10개입": "미떼 오리지날 핫초코 30g 10개"
+}
 
-# 쇼핑몰별 검색 URL 생성 함수 (최저가 정렬 파라미터 포함)
-def get_search_links(keyword):
-    encoded_keyword = urllib.parse.quote(keyword)
-    
-    # 쿠팡: sorter=salePriceAsc (가격 낮은순)
-    coupang_url = f"https://www.coupang.com/np/search?component=&q={encoded_keyword}&channel=user&sorter=salePriceAsc"
-    
-    # G마켓: s=1 (가격 낮은순)
-    gmarket_url = f"https://browse.gmarket.co.kr/search?keyword={encoded_keyword}&s=1"
-    
-    # 11번가: sortCd=L (가격 낮은순)
-    st11_url = f"https://search.11st.co.kr/Search.tmall?kwd={encoded_keyword}&sortCd=L"
-    
-    return coupang_url, gmarket_url, st11_url
+# 1. 선택 박스 (Selectbox)
+selected_item_name = st.selectbox(
+    "검색할 물품을 선택해주세요 👇",
+    options=list(items.keys()),
+    index=None,
+    placeholder="여기를 눌러 물품을 선택하세요..."
+)
 
-# 메인 UI 루프
-for item in items:
-    # 각 아이템별 컨테이너 생성
-    with st.container():
-        st.subheader(f"{item['image']} {item['display_name']}")
-        
-        # 3개의 컬럼으로 나누어 버튼 배치
-        col1, col2, col3 = st.columns(3)
-        
-        coupang, gmarket, st11 = get_search_links(item['keyword'])
-        
-        with col1:
-            st.link_button(
-                label="쿠팡 최저가 보기",
-                url=coupang,
-                help="쿠팡에서 낮은 가격순으로 검색합니다."
-            )
-            
-        with col2:
-            st.link_button(
-                label="G마켓 최저가 보기",
-                url=gmarket,
-                help="G마켓에서 낮은 가격순으로 검색합니다."
-            )
-            
-        with col3:
-            st.link_button(
-                label="11번가 최저가 보기",
-                url=st11,
-                help="11번가에서 낮은 가격순으로 검색합니다."
-            )
-            
-    st.divider() # 구분선
+# 2. 선택 시 버튼 표시
+if selected_item_name:
+    # 선택된 이름에 맞는 검색 키워드 가져오기
+    raw_keyword = items[selected_item_name]
+    
+    # URL 생성을 위한 간단한 처리 (공백을 +로 변경)
+    # 라이브러리 없이 브라우저가 인식하도록 처리
+    search_keyword = raw_keyword.replace(" ", "+")
+    
+    # 각 쇼핑몰 검색 링크 직접 생성 (최저가 정렬 파라미터 포함)
+    coupang_url = f"https://www.coupang.com/np/search?component=&q={search_keyword}&channel=user&sorter=salePriceAsc"
+    gmarket_url = f"https://browse.gmarket.co.kr/search?keyword={search_keyword}&s=1"
+    st11_url = f"https://search.11st.co.kr/Search.tmall?kwd={search_keyword}&sortCd=L"
+    
+    st.divider()
+    st.subheader(f"{selected_item_name}")
+    st.caption("아래 버튼을 누르면 새 탭에서 최저가 정렬 결과를 볼 수 있습니다.")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.link_button("쿠팡 최저가", coupang_url, use_container_width=True)
+    with col2:
+        st.link_button("G마켓 최저가", gmarket_url, use_container_width=True)
+    with col3:
+        st.link_button("11번가 최저가", st11_url, use_container_width=True)
 
-# 하단 정보
-st.info("💡 각 버튼을 누르면 해당 쇼핑몰의 '낮은 가격순' 검색 페이지가 새 탭에서 열립니다.")
+else:
+    st.info("👆 위 박스에서 물품을 선택하면 최저가 버튼이 나타납니다.")
