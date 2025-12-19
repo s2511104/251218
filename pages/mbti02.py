@@ -12,127 +12,162 @@ st.set_page_config(
     layout="wide"
 )
 
-# 한글 폰트 설정 (스트림릿 클라우드 리눅스 환경 호환성을 위해 영문 라벨 권장하지만, 
-# 필요한 경우 폰트 설치가 복잡하므로 그래프 라벨은 영문/코드명으로 유지하고 UI는 한글로 구성합니다)
+# 그래프 스타일 설정
 plt.style.use('seaborn-v0_8-whitegrid')
 
 @st.cache_data
 def load_data():
     try:
-        # 같은 폴더의 csv 파일 로드
-        df = pd.read_csv('pages/mbti_data.csv')
+        df = pd.read_csv('mbti_data.csv')
         return df
     except FileNotFoundError:
-        st.error("❌ 'mbti_data.csv' 파일을 찾을 수 없습니다. 같은 폴더에 파일을 위치시켜주세요.")
+        st.error("❌ 'pages/mbti_data.csv' 파일을 찾을 수 없습니다. 같은 폴더에 파일을 위치시켜주세요.")
         return None
 
+# -----------------------------------------------------------------------------
+# 원그래프 그리기 도우미 함수 (Top N + Others)
+# -----------------------------------------------------------------------------
+def plot_pie_chart(data_series, title, ax):
+    """
+    데이터가 너무 많으면 원그래프가 지저분해지므로
+    상위 8개만 표시하고 나머지는 'Others'로 묶는 함수입니다.
+    """
+    # 데이터 정렬
+    data_sorted = data_series.sort_values(ascending=False)
+    
+    # 상위 8개 추출
+    top_n = 8
+    if len(data_sorted) > top_n:
+        top_slice = data_sorted[:top_n]
+        others_value = data_sorted[top_n:].sum()
+        # 'Others' 추가
+        top_slice['Others'] = others_value
+    else:
+        top_slice = data_sorted
+
+    # 원그래프 그리기
+    wedges, texts, autotexts = ax.pie(
+        top_slice, 
+        labels=top_slice.index, 
+        autopct='%1.1f%%', 
+        startangle=90, 
+        colors=sns.color_palette("pastel"),
+        wedgeprops={'edgecolor': 'white'}
+    )
+    
+    ax.set_title(title)
+    # 텍스트 스타일 조정
+    plt.setp(texts, size=9)
+    plt.setp(autotexts, size=9, weight="bold")
+
+# -----------------------------------------------------------------------------
+# 메인 로직
+# -----------------------------------------------------------------------------
 df = load_data()
 
 if df is not None:
-    # -------------------------------------------------------------------------
-    # 2. 메인 헤더
-    # -------------------------------------------------------------------------
     st.title("🌏 국가별 MBTI 성향 분석 대시보드")
     st.markdown("""
-    이 대시보드는 전 세계 국가들의 MBTI 성향 데이터를 분석합니다.
-    * **전체 국가 평균**: 전 세계적으로 어떤 유형이 가장 흔한지 확인합니다.
-    * **국가별 상세**: 특정 국가의 MBTI 분포를 확인합니다.
-    * **순위 & 한국 비교**: 특정 MBTI 유형이 가장 많은 나라와 한국의 순위를 비교합니다.
+    * **전체 국가 평균**: 전 세계 MBTI 평균 비율 (막대 & 원그래프)
+    * **국가별 상세**: 특정 국가의 분포 확인
+    * **순위 비교**: 특정 MBTI 유형의 국가별 순위
     """)
     st.divider()
 
-    # 데이터의 숫자 컬럼만 추출 (국가명 제외)
-    mbti_cols = df.columns[1:] # 첫번째 컬럼이 Country라고 가정
+    mbti_cols = df.columns[1:] # 첫번째 컬럼(Country) 제외한 나머지
     
-    # 탭 구성
     tab1, tab2, tab3 = st.tabs(["📊 전체 국가 평균", "🔍 국가별 상세 분석", "🏆 Top 10 & 한국 비교"])
 
     # -------------------------------------------------------------------------
-    # Tab 1: 전체 국가 평균 비율
+    # Tab 1: 전체 국가 평균 (막대 + 원)
     # -------------------------------------------------------------------------
     with tab1:
         st.subheader("전 세계 MBTI 유형 평균 비율")
         
-        # 각 MBTI 유형별 평균 계산
         global_avg = df[mbti_cols].mean().sort_values(ascending=False)
         
-        # 시각화
-        fig, ax = plt.subplots(figsize=(12, 6))
-        sns.barplot(x=global_avg.index, y=global_avg.values, palette="viridis", ax=ax)
+        # 2단 컬럼 구성 (좌: 막대, 우: 원)
+        col1, col2 = st.columns([3, 2])
         
-        ax.set_ylabel("평균 비율 (Average Ratio)")
-        ax.set_xlabel("MBTI Type")
-        ax.set_title("Global Average Ratio by MBTI Type")
-        plt.xticks(rotation=45)
-        
-        st.pyplot(fig)
-        
+        with col1:
+            st.markdown("##### 📌 전체 순위 (막대그래프)")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.barplot(x=global_avg.index, y=global_avg.values, palette="viridis", ax=ax)
+            ax.set_ylabel("평균 비율")
+            plt.xticks(rotation=45, ha='right', fontsize=8)
+            st.pyplot(fig)
+            
+        with col2:
+            st.markdown("##### 🥧 상위 유형 점유율 (원그래프)")
+            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
+            plot_pie_chart(global_avg, "Global Top 8 Types Ratio", ax_pie)
+            st.pyplot(fig_pie)
+
         with st.expander("데이터 자세히 보기"):
             st.dataframe(global_avg.to_frame(name="Global Average Ratio").T)
 
     # -------------------------------------------------------------------------
-    # Tab 2: 국가별 상세 분석
+    # Tab 2: 국가별 상세 분석 (막대 + 원)
     # -------------------------------------------------------------------------
     with tab2:
         st.subheader("국가별 MBTI 성향 상세")
         
-        col1, col2 = st.columns([1, 3])
+        # 국가 선택창
+        country_list = df['Country'].unique().tolist()
+        default_ix = 0
+        if "South Korea" in country_list:
+            default_ix = country_list.index("South Korea")
+        elif "Korea, South" in country_list:
+            default_ix = country_list.index("Korea, South")
+            
+        selected_country = st.selectbox("분석할 국가를 선택하세요:", country_list, index=default_ix)
         
-        with col1:
-            # 국가 선택 (한국을 기본값으로 찾기 위해 노력)
-            country_list = df['Country'].unique().tolist()
-            default_ix = 0
-            if "South Korea" in country_list:
-                default_ix = country_list.index("South Korea")
-            elif "Korea, South" in country_list:
-                default_ix = country_list.index("Korea, South")
-                
-            selected_country = st.selectbox("분석할 국가를 선택하세요:", country_list, index=default_ix)
+        # 데이터 추출
+        country_data = df[df['Country'] == selected_country][mbti_cols].T
+        country_data.columns = ['Ratio']
+        country_series = country_data['Ratio'].sort_values(ascending=False)
         
-        with col2:
-            # 선택된 국가 데이터 추출
-            country_data = df[df['Country'] == selected_country][mbti_cols].T
-            country_data.columns = ['Ratio']
-            country_data = country_data.sort_values(by='Ratio', ascending=False)
-            
-            # 시각화
-            fig2, ax2 = plt.subplots(figsize=(12, 6))
-            sns.barplot(x=country_data.index, y=country_data['Ratio'], palette="magma", ax=ax2)
-            
-            ax2.set_title(f"MBTI Distribution in {selected_country}")
-            ax2.set_ylabel("비율 (Ratio)")
-            plt.xticks(rotation=45)
-            
+        # 2단 컬럼 구성
+        c_col1, c_col2 = st.columns([3, 2])
+        
+        with c_col1:
+            st.markdown(f"##### 📊 {selected_country} - 전체 분포")
+            fig2, ax2 = plt.subplots(figsize=(10, 6))
+            sns.barplot(x=country_series.index, y=country_series.values, palette="magma", ax=ax2)
+            ax2.set_ylabel("비율")
+            plt.xticks(rotation=45, ha='right', fontsize=8)
             st.pyplot(fig2)
-            st.info(f"💡 **{selected_country}**에서 가장 높은 비중을 차지하는 유형은 **{country_data.index[0]}** 입니다.")
+            
+        with c_col2:
+            st.markdown(f"##### 🥧 {selected_country} - 상위 유형 비율")
+            fig2_pie, ax2_pie = plt.subplots(figsize=(6, 6))
+            plot_pie_chart(country_series, f"{selected_country} Top 8 Types", ax2_pie)
+            st.pyplot(fig2_pie)
+
+        # 주요 인사이트 텍스트
+        top_type = country_series.index[0]
+        top_val = country_series.values[0]
+        st.info(f"💡 **{selected_country}**에서 가장 흔한 유형은 **{top_type}**이며, 전체 인구의 약 **{top_val*100:.1f}%**를 차지합니다.")
 
     # -------------------------------------------------------------------------
-    # Tab 3: MBTI 유형별 Top 10 & 한국 비교
+    # Tab 3: Top 10 & 한국 비교 (순위 비교는 막대그래프가 적합하므로 유지)
     # -------------------------------------------------------------------------
     with tab3:
         st.subheader("MBTI 유형별 Top 10 국가 및 한국 비교")
         
         target_mbti = st.selectbox("순위를 확인하고 싶은 MBTI 유형을 선택하세요:", mbti_cols)
         
-        # 해당 MBTI 기준으로 정렬하여 Top 10 추출
         top_10 = df[['Country', target_mbti]].sort_values(by=target_mbti, ascending=False).head(10)
-        
-        # 한국 데이터 찾기
         korea_row = df[df['Country'].isin(['South Korea', 'Korea, South'])]
         
-        col_l, col_r = st.columns([2, 1])
+        t_col1, t_col2 = st.columns([2, 1])
         
-        with col_l:
-            # Top 10 시각화
+        with t_col1:
             fig3, ax3 = plt.subplots(figsize=(10, 6))
-            
-            # 기본 색상 설정
             colors = ['lightgray'] * len(top_10)
-            
-            # 만약 Top 10 안에 한국이 있다면 색상 강조
             for i, country in enumerate(top_10['Country']):
                 if country in ['South Korea', 'Korea, South']:
-                    colors[i] = 'crimson'  # 한국 강조색
+                    colors[i] = 'crimson'
                 else:
                     colors[i] = 'steelblue'
 
@@ -142,26 +177,21 @@ if df is not None:
             plt.xticks(rotation=45)
             st.pyplot(fig3)
 
-        with col_r:
-            st.markdown(f"### 🇰🇷 한국 데이터 비교")
-            
+        with t_col2:
+            st.markdown(f"### 🇰🇷 한국 데이터")
             if not korea_row.empty:
                 korea_val = korea_row[target_mbti].values[0]
                 korea_rank = df[target_mbti].rank(ascending=False).loc[korea_row.index[0]]
-                korea_name = korea_row['Country'].values[0]
                 
-                st.metric(label=f"{korea_name}의 {target_mbti} 비율", value=f"{korea_val:.4f}")
-                st.metric(label="세계 순위", value=f"{int(korea_rank)}위 / {len(df)}개국")
+                st.metric(label="한국 비율", value=f"{korea_val:.4f}")
+                st.metric(label="세계 순위", value=f"{int(korea_rank)}위")
                 
-                # Top 10에 들었는지 확인 메시지
                 if int(korea_rank) <= 10:
-                    st.success(f"🎉 한국은 **{target_mbti}** 유형 비율이 세계 **Top 10**에 포함됩니다!")
+                    st.success("🎉 세계 Top 10 진입!")
                 else:
-                    st.info(f"한국은 Top 10에 들지 않았지만, 전체 {len(df)}개국 중 상위 **{int(korea_rank)}위**입니다.")
+                    st.info(f"전체 {len(df)}개국 중 {int(korea_rank)}위")
             else:
-                st.warning("데이터셋에서 'South Korea' 또는 'Korea, South'를 찾을 수 없습니다.")
-
-        st.caption("데이터 출처: 업로드된 mbti_data.csv")
+                st.warning("한국 데이터를 찾을 수 없습니다.")
 
 else:
     st.stop()
