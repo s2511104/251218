@@ -66,7 +66,7 @@ setup_korean_font()
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('mbti_data.csv')
+        df = pd.read_csv('pages/mbti_data.csv')
         # 국가명 한글 변환 적용
         df['Country'] = df['Country'].map(country_map).fillna(df['Country'])
         return df
