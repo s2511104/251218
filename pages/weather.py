@@ -87,3 +87,32 @@ if df is not None:
     # 최고기온
     max_change, max_slope = calculate_trend(yearly_df['최고기온(℃)'])
     with col3:
+        st.metric("최고기온 상승", f"{max_change:+.2f}℃", f"{max_slope:+.4f}℃/년")
+        st.caption("낮 최고 기온 상승폭")
+
+    st.divider()
+
+    # --- 2. 시각화 (라인 차트) ---
+    st.subheader("📈 연도별 기온 변화 추이")
+    
+    # 차트용 데이터 가공 (연도 쉼표 제거)
+    chart_data = yearly_df.copy()
+    chart_data.index = chart_data.index.map(str)
+    
+    st.line_chart(
+        chart_data,
+        color=["#2E8B57", "#1E90FF", "#FF4500"], # 초록, 파랑, 주황
+        height=500
+    )
+    st.caption("※ 초록: 평균기온 / 파랑: 최저기온 / 주황: 최고기온")
+
+    # --- 3. 데이터 검증 ---
+    with st.expander("🔎 데이터 자세히 보기"):
+        st.write("상위 5개 데이터:")
+        st.dataframe(df.head())
+        
+        st.write("연도별 통계 데이터:")
+        st.dataframe(yearly_df.style.format("{:.2f}"))
+
+else:
+    st.error("❌ 'ta_20251213130855.csv' 파일을 찾을 수 없습니다. 파일이 같은 폴더에 있는지 확인해주세요.")
