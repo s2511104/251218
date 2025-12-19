@@ -18,7 +18,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('mbti_data.csv')
+        df = pd.read_csv('pages/mbti_data.csv')
         return df
     except FileNotFoundError:
         st.error("❌ 'mbti_data.csv' 파일을 찾을 수 없습니다. 같은 폴더에 파일을 위치시켜주세요.")
