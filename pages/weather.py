@@ -10,7 +10,7 @@ st.divider()
 
 @st.cache_data
 def load_data():
-    file_name = 'ta_20251213130855.csv'
+    file_name = 'pages/ta_20251213130855.csv'
     
     try:
         try:
