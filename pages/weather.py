@@ -19,7 +19,7 @@ st.divider()
 # 데이터 로드 및 전처리 함수
 @st.cache_data
 def load_and_clean_data():
-    file_name = 'ta_20251213130855.csv'
+    file_name = 'pages/ta_20251213130855.csv'
     
     try:
         # 1. 파일 읽기 (인코딩 처리)
