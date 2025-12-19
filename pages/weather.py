@@ -21,7 +21,7 @@ st.divider()
 # 데이터 로드 함수 (캐싱 사용으로 속도 향상)
 @st.cache_data
 def load_data():
-    file_name = 'ta_20251213130855.csv'
+    file_name = 'pages/ta_20251213130855.csv'
     
     try:
         # 공공데이터 포털 등의 CSV는 주로 cp949 인코딩을 사용하나, 오류 시 utf-8 시도
