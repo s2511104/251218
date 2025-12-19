@@ -18,21 +18,19 @@ plt.style.use('seaborn-v0_8-whitegrid')
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('pages/mbti_data.csv')
+        df = pd.read_csv('mbti_data.csv')
         return df
     except FileNotFoundError:
         st.error("❌ 'mbti_data.csv' 파일을 찾을 수 없습니다. 같은 폴더에 파일을 위치시켜주세요.")
         return None
 
 # -----------------------------------------------------------------------------
-# 원그래프 그리기 도우미 함수 (Top N + Others)
+# 원그래프 그리기 도우미 함수 (Top 8 + Others)
 # -----------------------------------------------------------------------------
 def plot_pie_chart(data_series, title, ax):
     """
-    데이터가 너무 많으면 원그래프가 지저분해지므로
-    상위 8개만 표시하고 나머지는 'Others'로 묶는 함수입니다.
+    상위 8개만 표시하고 나머지는 'Others'로 묶어 원그래프를 그립니다.
     """
-    # 데이터 정렬
     data_sorted = data_series.sort_values(ascending=False)
     
     # 상위 8개 추출
@@ -40,7 +38,6 @@ def plot_pie_chart(data_series, title, ax):
     if len(data_sorted) > top_n:
         top_slice = data_sorted[:top_n]
         others_value = data_sorted[top_n:].sum()
-        # 'Others' 추가
         top_slice['Others'] = others_value
     else:
         top_slice = data_sorted
@@ -55,10 +52,9 @@ def plot_pie_chart(data_series, title, ax):
         wedgeprops={'edgecolor': 'white'}
     )
     
-    ax.set_title(title)
-    # 텍스트 스타일 조정
-    plt.setp(texts, size=9)
-    plt.setp(autotexts, size=9, weight="bold")
+    ax.set_title(title, pad=20)
+    plt.setp(texts, size=10)
+    plt.setp(autotexts, size=10, weight="bold")
 
 # -----------------------------------------------------------------------------
 # 메인 로직
@@ -68,38 +64,40 @@ df = load_data()
 if df is not None:
     st.title("🌏 국가별 MBTI 성향 분석 대시보드")
     st.markdown("""
-    * **전체 국가 평균**: 전 세계 MBTI 평균 비율 (막대 & 원그래프)
+    * **전체 국가 평균**: 전 세계 MBTI 평균 비율
     * **국가별 상세**: 특정 국가의 분포 확인
     * **순위 비교**: 특정 MBTI 유형의 국가별 순위
     """)
     st.divider()
 
-    mbti_cols = df.columns[1:] # 첫번째 컬럼(Country) 제외한 나머지
+    mbti_cols = df.columns[1:] 
     
     tab1, tab2, tab3 = st.tabs(["📊 전체 국가 평균", "🔍 국가별 상세 분석", "🏆 Top 10 & 한국 비교"])
 
     # -------------------------------------------------------------------------
-    # Tab 1: 전체 국가 평균 (막대 + 원)
+    # Tab 1: 전체 국가 평균 (세로 배치: 막대 -> 원)
     # -------------------------------------------------------------------------
     with tab1:
         st.subheader("전 세계 MBTI 유형 평균 비율")
         
         global_avg = df[mbti_cols].mean().sort_values(ascending=False)
         
-        # 2단 컬럼 구성 (좌: 막대, 우: 원)
-        col1, col2 = st.columns([3, 2])
+        # 1. 막대 그래프 (전체 순위)
+        st.markdown("##### 📌 전체 유형 순위 (Bar Chart)")
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.barplot(x=global_avg.index, y=global_avg.values, palette="viridis", ax=ax)
+        ax.set_ylabel("평균 비율")
+        plt.xticks(rotation=45, ha='right', fontsize=9)
+        st.pyplot(fig)
         
-        with col1:
-            st.markdown("##### 📌 전체 순위 (막대그래프)")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            sns.barplot(x=global_avg.index, y=global_avg.values, palette="viridis", ax=ax)
-            ax.set_ylabel("평균 비율")
-            plt.xticks(rotation=45, ha='right', fontsize=8)
-            st.pyplot(fig)
-            
-        with col2:
-            st.markdown("##### 🥧 상위 유형 점유율 (원그래프)")
-            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
+        st.divider() # 구분선
+        
+        # 2. 원 그래프 (상위 점유율)
+        # 원그래프는 너무 넓게 퍼지면 보기 안 좋으므로 중앙 정렬을 위해 컬럼 사용
+        c1, c2, c3 = st.columns([1, 2, 1]) # 가운데(2)만 사용
+        with c2:
+            st.markdown("##### 🥧 상위 유형 점유율 (Pie Chart)")
+            fig_pie, ax_pie = plt.subplots(figsize=(8, 8))
             plot_pie_chart(global_avg, "Global Top 8 Types Ratio", ax_pie)
             st.pyplot(fig_pie)
 
@@ -107,12 +105,12 @@ if df is not None:
             st.dataframe(global_avg.to_frame(name="Global Average Ratio").T)
 
     # -------------------------------------------------------------------------
-    # Tab 2: 국가별 상세 분석 (막대 + 원)
+    # Tab 2: 국가별 상세 분석 (세로 배치: 막대 -> 원)
     # -------------------------------------------------------------------------
     with tab2:
         st.subheader("국가별 MBTI 성향 상세")
         
-        # 국가 선택창
+        # 국가 선택
         country_list = df['Country'].unique().tolist()
         default_ix = 0
         if "South Korea" in country_list:
@@ -127,30 +125,31 @@ if df is not None:
         country_data.columns = ['Ratio']
         country_series = country_data['Ratio'].sort_values(ascending=False)
         
-        # 2단 컬럼 구성
-        c_col1, c_col2 = st.columns([3, 2])
+        # 요약 정보 표시
+        top_type = country_series.index[0]
+        top_val = country_series.values[0]
+        st.info(f"💡 **{selected_country}**에서 가장 흔한 유형은 **{top_type}**이며, 약 **{top_val*100:.1f}%**를 차지합니다.")
+
+        # 1. 막대 그래프
+        st.markdown(f"##### 📊 {selected_country} - 전체 분포")
+        fig2, ax2 = plt.subplots(figsize=(12, 6))
+        sns.barplot(x=country_series.index, y=country_series.values, palette="magma", ax=ax2)
+        ax2.set_ylabel("비율")
+        plt.xticks(rotation=45, ha='right', fontsize=9)
+        st.pyplot(fig2)
         
-        with c_col1:
-            st.markdown(f"##### 📊 {selected_country} - 전체 분포")
-            fig2, ax2 = plt.subplots(figsize=(10, 6))
-            sns.barplot(x=country_series.index, y=country_series.values, palette="magma", ax=ax2)
-            ax2.set_ylabel("비율")
-            plt.xticks(rotation=45, ha='right', fontsize=8)
-            st.pyplot(fig2)
-            
-        with c_col2:
+        st.divider() # 구분선
+
+        # 2. 원 그래프
+        c1, c2, c3 = st.columns([1, 2, 1]) # 가운데 정렬
+        with c2:
             st.markdown(f"##### 🥧 {selected_country} - 상위 유형 비율")
-            fig2_pie, ax2_pie = plt.subplots(figsize=(6, 6))
+            fig2_pie, ax2_pie = plt.subplots(figsize=(8, 8))
             plot_pie_chart(country_series, f"{selected_country} Top 8 Types", ax2_pie)
             st.pyplot(fig2_pie)
 
-        # 주요 인사이트 텍스트
-        top_type = country_series.index[0]
-        top_val = country_series.values[0]
-        st.info(f"💡 **{selected_country}**에서 가장 흔한 유형은 **{top_type}**이며, 전체 인구의 약 **{top_val*100:.1f}%**를 차지합니다.")
-
     # -------------------------------------------------------------------------
-    # Tab 3: Top 10 & 한국 비교 (순위 비교는 막대그래프가 적합하므로 유지)
+    # Tab 3: Top 10 & 한국 비교 (기존 유지)
     # -------------------------------------------------------------------------
     with tab3:
         st.subheader("MBTI 유형별 Top 10 국가 및 한국 비교")
@@ -160,9 +159,9 @@ if df is not None:
         top_10 = df[['Country', target_mbti]].sort_values(by=target_mbti, ascending=False).head(10)
         korea_row = df[df['Country'].isin(['South Korea', 'Korea, South'])]
         
-        t_col1, t_col2 = st.columns([2, 1])
+        col_l, col_r = st.columns([2, 1])
         
-        with t_col1:
+        with col_l:
             fig3, ax3 = plt.subplots(figsize=(10, 6))
             colors = ['lightgray'] * len(top_10)
             for i, country in enumerate(top_10['Country']):
@@ -177,7 +176,7 @@ if df is not None:
             plt.xticks(rotation=45)
             st.pyplot(fig3)
 
-        with t_col2:
+        with col_r:
             st.markdown(f"### 🇰🇷 한국 데이터")
             if not korea_row.empty:
                 korea_val = korea_row[target_mbti].values[0]
