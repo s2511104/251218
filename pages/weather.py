@@ -4,15 +4,15 @@ import numpy as np
 
 # 페이지 설정
 st.set_page_config(
-    page_title="110년 기온 변화 정밀 분석",
+    page_title="110년 기온 극값과 추세 분석",
     page_icon="🌡️",
     layout="wide"
 )
 
-st.title("🌡️ 지난 110년, 기온은 실제로 얼마나 올랐을까?")
+st.title("🌡️ 한파와 폭염, 110년간 어떻게 변했을까?")
 st.markdown("""
-업로드된 기상 데이터를 기반으로 **평균기온, 최저기온, 최고기온**의 변화를 정밀 분석합니다.
-데이터의 오염(특수문자 등)을 제거하고 순수 숫자 데이터만 추출하여 분석했습니다.
+연도별 **가장 추웠던 날(절대 최저)**과 **가장 더웠던 날(절대 최고)**의 기온을 분석합니다.
+**빨간색 직선(추세선)**을 통해 불규칙한 날씨 속에서도 뚜렷한 **상승 경향**이 있는지 확인해보세요.
 """)
 st.divider()
 
@@ -22,97 +22,102 @@ def load_and_clean_data():
     file_name = 'pages/ta_20251213130855.csv'
     
     try:
-        # 1. 파일 읽기 (인코딩 처리)
         try:
             df = pd.read_csv(file_name, encoding='cp949')
         except UnicodeDecodeError:
             df = pd.read_csv(file_name, encoding='utf-8')
 
-        # 2. 날짜 컬럼 전처리 (탭, 따옴표 제거)
         if '날짜' in df.columns:
             df['날짜'] = df['날짜'].astype(str).str.replace('\t', '').str.replace('"', '').str.strip()
             df['날짜'] = pd.to_datetime(df['날짜'], errors='coerce')
         
-        # 3. 데이터 강제 숫자 변환
-        target_cols = ['평균기온(℃)', '최저기온(℃)', '최고기온(℃)']
+        target_cols = ['최저기온(℃)', '최고기온(℃)']
         for col in target_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        # 4. 결측치(NaN) 제거
         df = df.dropna(subset=['날짜'] + target_cols)
-        
-        # 5. 연도 추출
         df['연도'] = df['날짜'].dt.year
         
-        return df, target_cols
-
+        return df
+        
     except FileNotFoundError:
-        return None, []
+        return None
 
-# 데이터 불러오기
-df, cols = load_and_clean_data()
+# 추세선 계산 함수 (1차 함수 y = ax + b)
+def get_trend_line(x_data, y_data):
+    slope, intercept = np.polyfit(x_data, y_data, 1)
+    return slope * x_data + intercept, slope, intercept
+
+# 메인 로직
+df = load_and_clean_data()
 
 if df is not None:
-    # --- 데이터 집계 (연도별 평균) ---
-    yearly_df = df.groupby('연도')[cols].mean()
+    # 1. 연도별 극값(Extreme) 추출 (min, max)
+    yearly_df = df.groupby('연도').agg({
+        '최저기온(℃)': 'min',
+        '최고기온(℃)': 'max'
+    })
     
-    start_year = yearly_df.index.min()
-    end_year = yearly_df.index.max()
+    # 2. 추세선 데이터 생성
+    years = yearly_df.index.values
+    
+    # 최저기온 추세선 계산
+    min_trend, min_slope, min_intercept = get_trend_line(years, yearly_df['최저기온(℃)'])
+    
+    # 최고기온 추세선 계산
+    max_trend, max_slope, max_intercept = get_trend_line(years, yearly_df['최고기온(℃)'])
+    
+    # 3. 차트용 데이터프레임 합치기
+    # 순서: [최저실제, 최저추세, 최고실제, 최고추세] -> 색상 매핑을 위해 순서 중요
+    chart_df = pd.DataFrame({
+        '연도': years,
+        '최저기온(실제)': yearly_df['최저기온(℃)'],
+        '📉 최저 추세선': min_trend,
+        '최고기온(실제)': yearly_df['최고기온(℃)'],
+        '📈 최고 추세선': max_trend
+    })
+    
+    # 연도를 인덱스로 설정하고 문자열로 변환 (2,025 콤마 제거)
+    chart_df.set_index('연도', inplace=True)
+    chart_df.index = chart_df.index.map(str)
 
-    # --- 1. 종합 요약 지표 (Metrics) ---
-    st.subheader(f"📊 분석 결과 요약 ({start_year}년 ~ {end_year}년)")
+    # --- 상단 지표 (Metrics) ---
+    st.subheader("📊 110년간의 변화 요약")
+    col1, col2 = st.columns(2)
     
-    col1, col2, col3 = st.columns(3)
-    
-    # 각 지표별 상승폭 계산 함수
-    def calculate_trend(y_values):
-        x = np.arange(len(y_values))
-        slope, intercept = np.polyfit(x, y_values, 1)
-        change = (slope * x[-1] + intercept) - (slope * x[0] + intercept)
-        return change, slope
+    # 전체 기간 상승폭 계산 (추세선 기준 끝값 - 시작값)
+    total_min_change = min_trend[-1] - min_trend[0]
+    total_max_change = max_trend[-1] - max_trend[0]
 
-    # 평균기온
-    mean_change, mean_slope = calculate_trend(yearly_df['평균기온(℃)'])
     with col1:
-        st.metric("평균기온 상승", f"{mean_change:+.2f}℃", f"{mean_slope:+.4f}℃/년")
-        st.caption("지난 110년간 평균적인 기온 상승폭")
-
-    # 최저기온
-    min_change, min_slope = calculate_trend(yearly_df['최저기온(℃)'])
+        st.metric("한파(최저기온) 약화", f"{total_min_change:+.1f}℃", f"{min_slope:+.4f}℃/년")
+        st.info("겨울철 극한 추위가 예전보다 훨씬 따뜻해졌음을 의미합니다.")
+        
     with col2:
-        st.metric("최저기온 상승", f"{min_change:+.2f}℃", f"{min_slope:+.4f}℃/년")
-        st.caption("아침 최저 기온 상승폭")
-
-    # 최고기온
-    max_change, max_slope = calculate_trend(yearly_df['최고기온(℃)'])
-    with col3:
-        st.metric("최고기온 상승", f"{max_change:+.2f}℃", f"{max_slope:+.4f}℃/년")
-        st.caption("낮 최고 기온 상승폭")
+        st.metric("폭염(최고기온) 강화", f"{total_max_change:+.1f}℃", f"{max_slope:+.4f}℃/년")
+        st.error("여름철 극한 더위가 예전보다 더 심해졌음을 의미합니다.")
 
     st.divider()
 
-    # --- 2. 시각화 (라인 차트) ---
-    st.subheader("📈 연도별 기온 변화 추이")
+    # --- 그래프 그리기 ---
+    st.subheader("📈 연도별 극값과 추세선 (Trend Line)")
+    st.markdown("얇은 선은 실제 매년 기록이며, **굵은 빨간 계열 선이 추세선**입니다.")
     
-    # 차트용 데이터 가공 (연도 쉼표 제거)
-    chart_data = yearly_df.copy()
-    chart_data.index = chart_data.index.map(str)
-    
+    # 색상 지정 (컬럼 순서대로):
+    # 1. 최저기온(실제) -> 파랑 (#1E90FF)
+    # 2. 최저기온(추세) -> 진한 빨강 (#B22222)
+    # 3. 최고기온(실제) -> 주황 (#FFA500)
+    # 4. 최고기온(추세) -> 밝은 빨강 (#FF0000)
     st.line_chart(
-        chart_data,
-        color=["#2E8B57", "#1E90FF", "#FF4500"], # 초록, 파랑, 주황
+        chart_df,
+        color=['#1E90FF', '#B22222', '#FFA500', '#FF0000'], 
         height=500
     )
-    st.caption("※ 초록: 평균기온 / 파랑: 최저기온 / 주황: 최고기온")
-
-    # --- 3. 데이터 검증 ---
-    with st.expander("🔎 데이터 자세히 보기"):
-        st.write("상위 5개 데이터:")
-        st.dataframe(df.head())
-        
-        st.write("연도별 통계 데이터:")
-        st.dataframe(yearly_df.style.format("{:.2f}"))
+    
+    # --- 데이터 표 ---
+    with st.expander("📄 데이터 상세 보기"):
+        st.dataframe(chart_df.style.format("{:.1f}"), use_container_width=True)
 
 else:
-    st.error("❌ 'ta_20251213130855.csv' 파일을 찾을 수 없습니다. 파일이 같은 폴더에 있는지 확인해주세요.")
+    st.error("데이터 파일을 찾을 수 없습니다.")
