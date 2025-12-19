@@ -18,7 +18,7 @@ def load_and_process_data(file_path):
     try:
         # csv 파일 읽기 (한글 인코딩 cp949)
         # os.path.exists 대신 try-except 구문으로 파일 없음 에러 처리
-        df = pd.read_csv(file_path, encoding='cp949')
+        df = pd.read_csv(file_path, encoding='utf-8')
         
         # 컬럼명 공백 제거
         df.columns = df.columns.str.strip()
